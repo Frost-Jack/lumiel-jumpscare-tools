@@ -1,20 +1,17 @@
 {
-  "id": "module",
-  "title": "New Module",
-  "description": "",
-  "version": "#{VERSION}#",
-  "library": "false",
-  "manifestPlusVersion": "1.2.0",
+  "id": "lumiel-jumpscare-tools",
+  "title": "Lumiel Jumpscare Tools",
+  "description": "Скримеры епт",
+  "version": "1.0.0",
+  "socket": true,
   "compatibility": {
-    "minimum": 10,
-    "verified": 10,
-    "maximum": 11
+    "minimum": "13",
+    "verified": "13.351",
+    "maximum": "13"
   },
   "authors": [
     {
-      "name": "The League of Extraordinary FVTT Developers",
-      "url": "https://github.com/League-of-Foundry-Developers",
-      "discord": "discordID#0001"
+      "name": "Lumiel"
     }
   ],
   "relationships": {
@@ -24,28 +21,12 @@
   "esmodules": [
     "scripts/module.js"
   ],
-  "scripts": [
-    "scripts/lib/lib.js"
-  ],
   "styles": [
     "styles/module.css"
   ],
-  "languages": [
-    {
-      "lang": "en",
-      "name": "English",
-      "path": "languages/en.json"
-    }
-  ],
-  "url": "#{URL}#",
-  "manifest": "#{MANIFEST}#",
-  "download": "#{DOWNLOAD}#",
+  "url": "https://github.com/Frost-Jack/lumiel-jumpscare-tools",
+  "manifest": "https://github.com/Frost-Jack/lumiel-jumpscare-tools/releases/latest/download/module.json",
+  "download": "https://github.com/Frost-Jack/lumiel-jumpscare-tools/releases/latest/download/module.zip",
   "license": "LICENSE",
-  "readme": "README.md",
-  "media": [
-    {
-      "type": "icon",
-      "url": "https://avatars2.githubusercontent.com/u/71292812?s=400&u=ccdb4eeb7abf551ca8f314e5a9bfd0479a4d3d41&v=4"
-    }
-  ]
+  "readme": "README.md"
 }

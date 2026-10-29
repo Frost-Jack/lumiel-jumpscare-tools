@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><base href="/"><title>Jumpscare browser test harness</title>
+<link rel="stylesheet" href="/css/foundry2.css"><link rel="stylesheet" href="/fonts/fontawesome/css/all.min.css">
+<link rel="stylesheet" href="/modules/lumiel-jumpscare-tools/styles/module.css">
+<style>body {background:#252731;} .application {position:absolute;left:30px;top:30px;display:flex;flex-direction:column;} .window-content {flex:1;min-height:0;} .window-header{display:flex;align-items:center;padding:10px;gap:10px;} .window-title{flex:1;font-size:18px;margin:0;} .test-image{width:100%;height:100%;object-fit:contain;} .test-image-frame{z-index:200;left:250px;top:120px;}</style>
+</head><body class="theme-dark"><script type="module">
+// This harness exercises the module in Chromium with a small Foundry API substitute.
+// It does not substitute for checking ApplicationV2 in an actual running Foundry world.
+const ID = "lumiel-jumpscare-tools";
+const params = new URLSearchParams(location.search);
+const ownId = params.get("user") || "gm";
+const hookMap = new Map();
+window.Hooks = {
+  on(key, fn) { const list = hookMap.get(key) || []; list.push(fn); hookMap.set(key, list); },
+  once(key, fn) { const once = (...args) => { this.off(key, once); return fn(...args); }; this.on(key, once); },
+  off(key, fn) { hookMap.set(key, (hookMap.get(key) || []).filter(f => f !== fn)); },
+  callAll(key, ...args) { for (const fn of hookMap.get(key) || []) fn(...args); }
+};
+window.notifications = [];
+window.ui = {notifications: Object.fromEntries(["info", "warn", "error"].map(level => [level, message => notifications.push({level, message})]))};
+class App {
+  constructor(options = {}) { this.options = {...this.constructor.DEFAULT_OPTIONS, ...options}; this.rendered = false; }
+  async render(options = {}) {
+    if (this._canRender?.() === false) return this;
+    const first = !this.rendered;
+    if (first) {
+      this.element = document.createElement("section");
+      this.element.className = `application window-app ${(this.options.classes || []).join(" ")}`;
+      this.element.id = this.options.id || `test-${Math.random()}`;
+      this.element.style.width = `${this.options.position?.width || 600}px`;
+      this.element.style.height = `${this.options.position?.height || 500}px`;
+      this.element.innerHTML = '<header class="window-header"><h1 class="window-title"></h1><button type="button" class="test-close">×</button></header><section class="window-content"></section>';
+      this.element.querySelector("h1").textContent = this.options.window?.title || "";
+      this.element.querySelector(".test-close").onclick = () => this.close();
+      document.body.append(this.element);
+    }
+    const result = await this._renderHTML?.();
+    this._replaceHTML?.(result, this.element.querySelector(".window-content"));
+    this.rendered = true;
+    if (first) await this._onFirstRender?.();
+    await this._onRender?.();
+    return this;
+  }
+  async close() { this.rendered = false; this.element?.remove(); return this; }
+}
+class ImagePopout extends App {
+  constructor(options) { super({...options, classes: ["test-image-frame"]}); }
+  async _renderHTML() { const img = document.createElement("img"); img.src = this.options.src; img.className = "test-image"; return img; }
+  _replaceHTML(result, content) { content.replaceChildren(result); }
+}
+window.soundEvents = [];
+class Sound {
+  constructor(src) { this.src = src; this.loaded = false; this.failed = false; }
+  async load() {
+    const response = await fetch(this.src);
+    if (!response.ok) { this.failed = true; return this; }
+    this.buffer = await game.audio.interface.decodeAudioData(await response.arrayBuffer());
+    this.loaded = true; return this;
+  }
+  async play({volume}) {
+    if (this.stopping) throw new Error("Sound reused before its previous stop completed");
+    const gain = game.audio.interface.createGain(); gain.gain.value = volume;
+    this.source = game.audio.interface.createBufferSource(); this.source.buffer = this.buffer;
+    this.source.connect(gain); gain.connect(game.audio.interface.destination); this.source.start();
+    soundEvents.push({type: "play", src: this.src}); return this;
+  }
+  async stop() { this.stopping = true; try { this.source?.stop(); } catch {} await new Promise(resolve => setTimeout(resolve, 10)); this.stopping = false; soundEvents.push({type: "stop", src: this.src}); }
+}
+window.foundry = {
+  applications: {api: {ApplicationV2: App, DialogV2: {confirm: async () => true}}, apps: {ImagePopout, FilePicker: {implementation: class {constructor(options) {window.picker = options;} render() {}}}}},
+  audio: {Sound}, utils: {deepClone: value => structuredClone(value), randomID: () => crypto.randomUUID().replaceAll("-", "").slice(0, 16)}
+};
+const users = [{id:"gm",name:"ГМ",isGM:true,active:true},{id:"p1",name:"Александр",isGM:false,active:true},{id:"p2",name:"Игрок с длинным именем",isGM:false,active:true},{id:"p3",name:"Отключённый игрок",isGM:false,active:false}];
+users.get = id => users.find(u => u.id === id); users.activeGM = users[0];
+const settings = new Map();
+const definitions = new Map();
+let socketHandler;
+window.game = {
+  user: users.get(ownId), users, macros: [], modules: new Map([[ID, {}]]),
+  audio: {locked: false, interface: new AudioContext()},
+  settings: {
+    register(ns, key, options) { definitions.set(key, options); settings.set(key, key === "enabled" ? params.get("enabled") !== "false" : structuredClone(options.default)); },
+    registerMenu() {}, get(ns, key) { return settings.get(key); },
+    async set(ns, key, value) { settings.set(key, structuredClone(value)); definitions.get(key)?.onChange?.(value); return value; }
+  },
+  socket: {on(channel, fn) {socketHandler = fn;}, emit(channel, message, {recipients}) {window.sendSocket?.(message, recipients);}}
+};
+window.deliver = async (message, senderId) => socketHandler?.(message, senderId);
+window.CONST = {DOCUMENT_OWNERSHIP_LEVELS: {NONE: 0}};
+window.Macro = {create: async data => {game.macros.push({...data, getFlag: (ns, key) => data.flags[ns]?.[key]});}};
+await import("/modules/lumiel-jumpscare-tools/scripts/module.js");
+Hooks.callAll("init"); Hooks.callAll("ready");
+window.runtime = await import("/modules/lumiel-jumpscare-tools/scripts/runtime.js");
+window.api = game.modules.get(ID).api;
+window.harnessReady = true;
+</script></body></html>
